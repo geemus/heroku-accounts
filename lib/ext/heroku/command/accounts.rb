@@ -1,6 +1,3 @@
-require "fileutils"
-require "yaml"
-
 # manage multiple heroku accounts
 #
 class Heroku::Command::Accounts < Heroku::Command::Base
@@ -23,7 +20,7 @@ class Heroku::Command::Accounts < Heroku::Command::Base
     end
   end
 
-  # accounts:add
+  # accounts:add [NAME]
   #
   # add an account to the local credential store
   #
@@ -35,12 +32,7 @@ class Heroku::Command::Accounts < Heroku::Command::Base
     error("Please specify an account name.") unless name
     error("That account already exists.") if account_exists?(name)
 
-    username, password = auth.ask_for_credentials
-
-    write_account(name,
-      :username      => username,
-      :password      => password
-    )
+    write_account(name, auth.ask_for_credentials)
 
     if extract_option("--auto") then
       display "Generating new SSH key"
@@ -79,7 +71,9 @@ class Heroku::Command::Accounts < Heroku::Command::Base
     error("Please specify an account name.") unless name
     error("That account does not exist.") unless account_exists?(name)
 
-    FileUtils.rm_f(account_file(name))
+    netrc.delete("api.#{host}.#{name}")
+    netrc.delete("code.#{host}.#{name}")
+    netrc.save
 
     display "Account removed: #{name}"
   end
@@ -111,6 +105,11 @@ class Heroku::Command::Accounts < Heroku::Command::Base
     error("Please specify an account name.") unless name
     error("That account does not exist.") unless account_exists?(name)
 
+    # set base/default netrc entries
+    netrc["api.#{host}"]  = netrc["api.#{host}.#{name}"]
+    netrc["code.#{host}"] = netrc["code.#{host}.#{name}"]
+    netrc.save
+
     %x{ git config --global heroku.account #{name} }
   end
 
@@ -125,23 +124,18 @@ private ######################################################################
 
   def account(name)
     error("No such account: #{name}") unless account_exists?(name)
-    read_account(name)
-  end
-
-  def accounts_directory
-    @accounts_directory ||= begin
-      directory = File.join(home_directory, ".heroku", "accounts")
-      FileUtils::mkdir_p(directory)
-      directory
-    end
-  end
-
-  def account_file(name)
-    File.join(accounts_directory, name)
+    username, password = netrc["api.#{host}.#{name}"]
+    { :username => username, :password => password }
   end
 
   def account_names
-    Dir[File.join(accounts_directory, "*")].map { |d| File.basename(d) }
+    account_names = []
+    netrc.each do |entry|
+      if entry[1] =~ %r{api\.#{host}\.(.+)}
+        account_names << $1
+      end
+    end
+    account_names
   end
 
   def account_exists?(name)
@@ -160,12 +154,18 @@ private ######################################################################
     end
   end
 
-  def read_account(name)
-    YAML::load_file(account_file(name))
+  def host
+    Heroku::Auth.host
+  end
+
+  def netrc
+    Heroku::Auth.netrc
   end
 
   def write_account(name, account)
-    File.open(account_file(name), "w") { |f| f.puts YAML::dump(account) }
+    netrc["api.#{host}.#{name}"]  = account
+    netrc["code.#{host}.#{name}"] = account
+    netrc.save
   end
 
   def error(message)
