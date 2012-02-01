@@ -32,7 +32,9 @@ class Heroku::Command::Accounts < Heroku::Command::Base
     error("Please specify an account name.") unless name
     error("That account already exists.") if account_exists?(name)
 
-    write_account(name, auth.ask_for_credentials)
+    username, password = auth.ask_for_credentials
+
+    write_account(name, [username, password])
 
     if extract_option("--auto") then
       display "Generating new SSH key"
