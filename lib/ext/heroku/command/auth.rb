@@ -1,14 +1,6 @@
 module Heroku::Command
   class Auth
 
-    def user
-      fetch_from_account[:username]
-    end
-
-    def password
-      fetch_from_account[:password]
-    end
-
   private ####################################################################
 
     def extract_account
@@ -33,6 +25,14 @@ You can also add it as a git config attribute with:
 
     def fetch_from_account
       account = Heroku::Command::Accounts.account(extract_account)
+    end
+
+    def password
+      fetch_from_account[:password]
+    end
+
+    def user
+      fetch_from_account[:username]
     end
 
   end
